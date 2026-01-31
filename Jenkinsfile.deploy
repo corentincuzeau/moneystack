@@ -20,8 +20,8 @@ pipeline {
         // Credentials
         NEXUS_CREDENTIALS = credentials('nexus-deployer')
 
-        // Application URLs
-        API_URL = 'https://moneystack-api.corentin-cuzeau.fr'
+        // Application URLs (VITE_API_URL doit inclure /api/v1)
+        API_URL = 'https://moneystack-api.corentin-cuzeau.fr/api/v1'
         WEB_URL = 'https://moneystack.corentin-cuzeau.fr'
     }
 
