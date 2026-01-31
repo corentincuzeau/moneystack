@@ -301,77 +301,30 @@ VERSION=${params.VERSION}
 """
 
                     // Generation du README de deploiement
-                    writeFile file: 'deployment/README.md', text: """# MoneyStack - Deploiement Production
-
-## Version: ${params.VERSION}
-## Commit: ${env.GIT_COMMIT_SHORT}
+                    writeFile file: 'deployment/README.md', text: '''# MoneyStack - Deploiement Production
 
 ## Prerequis
 
 1. Docker et Docker Compose installes sur le VPS
-2. Reseau Traefik externe cree : \`docker network create traefik\`
-3. Traefik configure et en cours d'execution
-4. Acces au registre Nexus (${NEXUS_REGISTRY_PULL})
+2. Reseau Traefik externe cree : docker network create traefik
+3. Traefik configure et en cours d execution
+4. Acces au registre Nexus
 
 ## Installation
 
-### 1. Creer le repertoire de deploiement
-```bash
-mkdir -p /opt/moneystack
-cd /opt/moneystack
-```
-
-### 2. Copier les fichiers
-```bash
-cp docker-compose.yaml /opt/moneystack/
-cp .env.example /opt/moneystack/.env
-```
-
-### 3. Configurer l'environnement
-```bash
-nano /opt/moneystack/.env
-# Modifier les valeurs sensibles
-```
-
-### 4. Se connecter au registre Nexus
-```bash
-docker login ${NEXUS_REGISTRY_PULL}
-```
-
-### 5. Demarrer les services
-```bash
-cd /opt/moneystack
-docker compose pull
-docker compose up -d
-```
-
-### 6. Executer les migrations
-```bash
-docker compose exec api npx prisma migrate deploy
-```
+    mkdir -p /opt/moneystack
+    cd /opt/moneystack
+    # Copier docker-compose.yaml et .env
+    docker login 91.134.89.248:8084
+    docker compose pull
+    docker compose up -d
+    docker compose exec api npx prisma migrate deploy
 
 ## URLs
 
-- **Frontend**: https://moneystack.corentin-cuzeau.fr
-- **API**: https://moneystack-api.corentin-cuzeau.fr
-
-## Rollback
-
-Pour revenir a une version precedente :
-```bash
-export VERSION=x.x.x
-docker compose pull
-docker compose up -d
-```
-
-## Logs
-
-```bash
-docker compose logs -f api
-docker compose logs -f web
-docker compose logs -f postgres
-```
-"""
+- Frontend: https://moneystack.corentin-cuzeau.fr
+- API: https://moneystack-api.corentin-cuzeau.fr
+'''
                 }
             }
         }
