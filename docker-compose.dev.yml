@@ -1,0 +1,70 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: moneystack-postgres-dev
+    environment:
+      POSTGRES_USER: moneystack
+      POSTGRES_PASSWORD: moneystack
+      POSTGRES_DB: moneystack
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moneystack"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API (NestJS)
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: builder
+    container_name: moneystack-api-dev
+    entrypoint: ["/bin/sh", "/app/docker/api/entrypoint.dev.sh"]
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+      - ./apps/api/prisma:/app/apps/api/prisma
+      - ./packages/shared/src:/app/packages/shared/src
+      - ./docker/api/entrypoint.dev.sh:/app/docker/api/entrypoint.dev.sh
+      - /app/node_modules
+      - /app/apps/api/node_modules
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://moneystack:moneystack@postgres:5432/moneystack
+      JWT_SECRET: dev-jwt-secret-change-in-production
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_CALLBACK_URL: http://localhost:3000/api/v1/auth/google/callback
+      CORS_ORIGINS: http://localhost:5173
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Web (React)
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: builder
+    container_name: moneystack-web-dev
+    command: npm run dev -w @moneystack/web -- --host
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./apps/web/src:/app/apps/web/src
+      - ./packages/shared/src:/app/packages/shared/src
+      - /app/node_modules
+      - /app/apps/web/node_modules
+    environment:
+      VITE_API_URL: http://localhost:3000/api/v1
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:

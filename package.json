@@ -1,0 +1,47 @@
+{
+  "name": "moneystack",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Application de gestion de budget personnel",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "npm run dev -w @moneystack/api",
+    "dev:web": "npm run dev -w @moneystack/web",
+    "build": "npm run build -w @moneystack/shared && npm run build -w @moneystack/api && npm run build -w @moneystack/web",
+    "build:api": "npm run build -w @moneystack/api",
+    "build:web": "npm run build -w @moneystack/web",
+    "test": "npm run test -w @moneystack/api && npm run test -w @moneystack/web",
+    "test:api": "npm run test -w @moneystack/api",
+    "test:web": "npm run test -w @moneystack/web",
+    "lint": "eslint \"apps/**/*.{ts,tsx}\" \"packages/**/*.ts\"",
+    "lint:fix": "eslint \"apps/**/*.{ts,tsx}\" \"packages/**/*.ts\" --fix",
+    "format": "prettier --write \"apps/**/*.{ts,tsx,json}\" \"packages/**/*.{ts,json}\"",
+    "prisma:generate": "npm run prisma:generate -w @moneystack/api",
+    "prisma:migrate": "npm run prisma:migrate -w @moneystack/api",
+    "prisma:studio": "npm run prisma:studio -w @moneystack/api",
+    "docker:dev": "docker-compose -f docker-compose.dev.yml up --build",
+    "docker:dev:down": "docker-compose -f docker-compose.dev.yml down",
+    "docker:test": "docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit",
+    "docker:prod": "docker-compose -f docker-compose.prod.yml up -d",
+    "docker:prod:down": "docker-compose -f docker-compose.prod.yml down"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "prettier": "^3.2.5",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

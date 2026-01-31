@@ -1,0 +1,64 @@
+services:
+  # PostgreSQL Database for tests (in-memory for speed)
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: moneystack-postgres-test
+    environment:
+      POSTGRES_USER: moneystack
+      POSTGRES_PASSWORD: moneystack
+      POSTGRES_DB: moneystack_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moneystack"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test_network
+
+  # API tests (NestJS + Jest)
+  api-test:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: builder
+    container_name: moneystack-api-test
+    command: >
+      sh -c "
+        npm run prisma:generate -w @moneystack/api &&
+        npm run prisma:migrate -w @moneystack/api &&
+        npm run test -w @moneystack/api -- --ci --reporters=default --reporters=jest-junit
+      "
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://moneystack:moneystack@postgres-test:5432/moneystack_test
+      JWT_SECRET: test-jwt-secret
+      JEST_JUNIT_OUTPUT_DIR: /app/test-results
+      JEST_JUNIT_OUTPUT_NAME: junit-api.xml
+    volumes:
+      - ./test-results:/app/test-results
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    networks:
+      - test_network
+
+  # Web tests (Vitest)
+  web-test:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: builder
+    container_name: moneystack-web-test
+    command: npm run test -w @moneystack/web -- --run --reporter=junit --outputFile=/app/test-results/junit-web.xml
+    environment:
+      NODE_ENV: test
+    volumes:
+      - ./test-results:/app/test-results
+    networks:
+      - test_network
+
+networks:
+  test_network:
+    driver: bridge

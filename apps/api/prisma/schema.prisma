@@ -1,0 +1,291 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  googleId  String   @unique
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts       Account[]
+  categories     Category[]
+  subscriptions  Subscription[]
+  credits        Credit[]
+  projects       Project[]
+  settings       UserSettings?
+  refreshTokens  RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+model UserSettings {
+  id                     String   @id @default(uuid())
+  userId                 String   @unique
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency               String   @default("EUR")
+  locale                 String   @default("fr-FR")
+  timezone               String   @default("Europe/Paris")
+  lowBalanceThreshold    Float    @default(100)
+  hasCompletedOnboarding Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@map("user_settings")
+}
+
+// Account types enum
+enum AccountType {
+  CHECKING
+  SAVINGS
+  CASH
+  INVESTMENT
+  CREDIT_CARD
+}
+
+model Account {
+  id        String      @id @default(uuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  type      AccountType
+  balance   Float       @default(0)
+  color     String      @default("#3B82F6")
+  icon      String      @default("wallet")
+  isDefault Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  transactions     Transaction[] @relation("AccountTransactions")
+  transfersTo      Transaction[] @relation("TransferToAccount")
+  subscriptions    Subscription[]
+  credits          Credit[]
+  projects         Project[]
+  contributions    ProjectContribution[]
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+// Category types enum
+enum CategoryType {
+  INCOME
+  EXPENSE
+}
+
+model Category {
+  id        String       @id @default(uuid())
+  userId    String?
+  user      User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  type      CategoryType
+  icon      String       @default("tag")
+  color     String       @default("#6B7280")
+  isDefault Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  transactions  Transaction[]
+  subscriptions Subscription[]
+
+  @@index([userId])
+  @@index([type])
+  @@map("categories")
+}
+
+// Transaction types enum
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+// Recurring frequency enum
+enum RecurringFrequency {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+model Transaction {
+  id                  String              @id @default(uuid())
+  accountId           String
+  account             Account             @relation("AccountTransactions", fields: [accountId], references: [id], onDelete: Cascade)
+  toAccountId         String?
+  toAccount           Account?            @relation("TransferToAccount", fields: [toAccountId], references: [id], onDelete: SetNull)
+  categoryId          String?
+  category            Category?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  amount              Float
+  type                TransactionType
+  description         String
+  date                DateTime
+  isRecurring         Boolean             @default(false)
+  recurringFrequency  RecurringFrequency?
+  recurringEndDate    DateTime?
+  parentTransactionId String?
+  parentTransaction   Transaction?        @relation("RecurringTransactions", fields: [parentTransactionId], references: [id], onDelete: SetNull)
+  childTransactions   Transaction[]       @relation("RecurringTransactions")
+  tags                String[]            @default([])
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@index([accountId])
+  @@index([categoryId])
+  @@index([date])
+  @@index([type])
+  @@map("transactions")
+}
+
+model Subscription {
+  id              String             @id @default(uuid())
+  userId          String
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId       String
+  account         Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  categoryId      String?
+  category        Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  name            String
+  amount          Float
+  frequency       RecurringFrequency
+  paymentDay      Int                @default(1)
+  nextPaymentDate DateTime
+  reminderDays    Int                @default(3)
+  isActive        Boolean            @default(true)
+  icon            String?
+  color           String?
+  notes           String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([nextPaymentDate])
+  @@map("subscriptions")
+}
+
+// Credit types enum
+enum CreditType {
+  MORTGAGE
+  AUTO
+  PERSONAL
+  STUDENT
+  OTHER
+}
+
+model Credit {
+  id              String         @id @default(uuid())
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId       String
+  account         Account        @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name            String
+  type            CreditType
+  totalAmount     Float
+  remainingAmount Float
+  monthlyPayment  Float
+  interestRate    Float
+  startDate       DateTime
+  endDate         DateTime
+  paymentDay      Int            @default(1)
+  reminderDays    Int            @default(3)
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  payments CreditPayment[]
+
+  @@index([userId])
+  @@index([accountId])
+  @@map("credits")
+}
+
+model CreditPayment {
+  id               String   @id @default(uuid())
+  creditId         String
+  credit           Credit   @relation(fields: [creditId], references: [id], onDelete: Cascade)
+  amount           Float
+  principal        Float
+  interest         Float
+  remainingBalance Float
+  paymentDate      DateTime
+  isPaid           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  @@index([creditId])
+  @@index([paymentDate])
+  @@map("credit_payments")
+}
+
+// Project status enum
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  PAUSED
+  CANCELLED
+}
+
+model Project {
+  id            String        @id @default(uuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId     String?
+  account       Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  name          String
+  description   String?
+  targetAmount  Float
+  currentAmount Float         @default(0)
+  deadline      DateTime?
+  status        ProjectStatus @default(ACTIVE)
+  color         String        @default("#8B5CF6")
+  icon          String        @default("target")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  contributions ProjectContribution[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("projects")
+}
+
+model ProjectContribution {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  amount    Float
+  date      DateTime @default(now())
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+  @@index([accountId])
+  @@map("project_contributions")
+}
+
