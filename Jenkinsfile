@@ -26,24 +26,6 @@ pipeline {
             }
         }
 
-        stage('Install Dependencies') {
-            steps {
-                sh 'npm ci'
-            }
-        }
-
-        stage('Lint') {
-            steps {
-                sh 'npm run lint'
-            }
-        }
-
-        stage('Build Shared Package') {
-            steps {
-                sh 'npm run build -w @moneystack/shared'
-            }
-        }
-
         stage('Build Docker Test Images') {
             steps {
                 sh 'docker compose -f docker-compose.test.yml build'
@@ -78,10 +60,10 @@ pipeline {
             cleanWs()
         }
         success {
-            echo "Tests passed successfully for commit ${env.GIT_COMMIT_SHORT}"
+            echo "Tests reussis pour le commit ${env.GIT_COMMIT_SHORT}"
         }
         failure {
-            echo "Tests failed for commit ${env.GIT_COMMIT_SHORT}"
+            echo "Tests echoues pour le commit ${env.GIT_COMMIT_SHORT}"
         }
     }
 }

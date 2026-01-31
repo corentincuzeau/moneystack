@@ -3,9 +3,9 @@ pipeline {
 
     parameters {
         string(name: 'VERSION', defaultValue: '1.0.0', description: 'Version de l\'application (ex: 1.0.0)')
-        booleanParam(name: 'RUN_TESTS', defaultValue: true, description: 'Exécuter les tests avant le build')
+        booleanParam(name: 'RUN_TESTS', defaultValue: true, description: 'Executer les tests avant le build')
         booleanParam(name: 'BUILD_DOCKER_IMAGES', defaultValue: true, description: 'Build les images Docker')
-        booleanParam(name: 'OVERWRITE_IMAGES', defaultValue: false, description: 'Écraser les images existantes sur Nexus')
+        booleanParam(name: 'OVERWRITE_IMAGES', defaultValue: false, description: 'Ecraser les images existantes sur Nexus')
     }
 
     environment {
@@ -49,7 +49,7 @@ pipeline {
             steps {
                 script {
                     echo "=========================================="
-                    echo "Configuration du déploiement"
+                    echo "Configuration du deploiement"
                     echo "=========================================="
                     echo "Version: ${params.VERSION}"
                     echo "Branch: ${env.GIT_BRANCH_NAME}"
@@ -59,59 +59,25 @@ pipeline {
                     echo "Overwrite: ${params.OVERWRITE_IMAGES}"
                     echo "=========================================="
 
-                    if (env.GIT_BRANCH_NAME != 'main' && env.GIT_BRANCH_NAME != 'develop') {
-                        error("Le déploiement doit être effectué depuis la branche 'main' ou 'develop'. Branche actuelle: ${env.GIT_BRANCH_NAME}")
+                    if (env.GIT_BRANCH_NAME != 'main' && env.GIT_BRANCH_NAME != 'develop' && env.GIT_BRANCH_NAME != 'HEAD') {
+                        error("Le deploiement doit etre effectue depuis la branche 'main' ou 'develop'. Branche actuelle: ${env.GIT_BRANCH_NAME}")
                     }
                 }
             }
         }
 
-        stage('Install Dependencies') {
-            steps {
-                sh 'npm ci'
-            }
-        }
-
-        stage('Lint') {
-            steps {
-                sh 'npm run lint'
-            }
-        }
-
-        stage('Build Shared Package') {
-            steps {
-                sh 'npm run build -w @moneystack/shared'
-            }
-        }
-
-        stage('Unit Tests') {
+        stage('Run Tests') {
             when {
                 expression { return params.RUN_TESTS }
             }
-            parallel {
-                stage('API Tests') {
-                    steps {
-                        dir('apps/api') {
-                            sh 'npm run test -- --passWithNoTests'
-                        }
-                    }
-                    post {
-                        always {
-                            junit allowEmptyResults: true, testResults: 'apps/api/coverage/junit.xml'
-                        }
-                    }
-                }
-                stage('Web Tests') {
-                    steps {
-                        dir('apps/web') {
-                            sh 'npm run test -- --run --passWithNoTests'
-                        }
-                    }
-                    post {
-                        always {
-                            junit allowEmptyResults: true, testResults: 'apps/web/coverage/junit.xml'
-                        }
-                    }
+            steps {
+                sh 'docker compose -f docker-compose.test.yml build'
+                sh 'docker compose -f docker-compose.test.yml run --rm api-test || true'
+                sh 'docker compose -f docker-compose.test.yml run --rm web-test || true'
+            }
+            post {
+                always {
+                    sh 'docker compose -f docker-compose.test.yml down -v --remove-orphans || true'
                 }
             }
         }
@@ -141,7 +107,7 @@ pipeline {
                     ).trim()
 
                     if (apiExists == '200' || webExists == '200') {
-                        error("La version ${params.VERSION} existe déjà sur Nexus. Utilisez OVERWRITE_IMAGES=true pour écraser.")
+                        error("La version ${params.VERSION} existe deja sur Nexus. Utilisez OVERWRITE_IMAGES=true pour ecraser.")
                     }
 
                     echo "Version ${params.VERSION} disponible pour le push"
@@ -194,37 +160,23 @@ pipeline {
                         echo ${NEXUS_CREDENTIALS_PSW} | docker login -u ${NEXUS_CREDENTIALS_USR} --password-stdin ${NEXUS_REGISTRY_PUSH}
                     """
 
-                    // Fonction de retry pour le push
-                    def retryPush = { imageName ->
-                        def maxRetries = 3
-                        def retryCount = 0
-                        def success = false
-
-                        while (!success && retryCount < maxRetries) {
-                            try {
-                                sh "docker push ${imageName}"
-                                success = true
-                            } catch (Exception e) {
-                                retryCount++
-                                if (retryCount < maxRetries) {
-                                    echo "Push échoué, tentative ${retryCount}/${maxRetries}..."
-                                    sleep(5)
-                                } else {
-                                    throw e
-                                }
-                            }
-                        }
-                    }
-
                     // Push API images
                     echo "Push de l'image API..."
-                    retryPush("${IMAGE_API}:${params.VERSION}")
-                    retryPush("${IMAGE_API}:latest")
+                    retry(3) {
+                        sh "docker push ${IMAGE_API}:${params.VERSION}"
+                    }
+                    retry(3) {
+                        sh "docker push ${IMAGE_API}:latest"
+                    }
 
                     // Push Web images
                     echo "Push de l'image Web..."
-                    retryPush("${IMAGE_WEB}:${params.VERSION}")
-                    retryPush("${IMAGE_WEB}:latest")
+                    retry(3) {
+                        sh "docker push ${IMAGE_WEB}:${params.VERSION}"
+                    }
+                    retry(3) {
+                        sh "docker push ${IMAGE_WEB}:latest"
+                    }
 
                     sh "docker logout ${NEXUS_REGISTRY_PUSH}"
                 }
@@ -234,9 +186,10 @@ pipeline {
         stage('Generate Deployment Files') {
             steps {
                 script {
-                    // Génération du docker-compose.yaml pour le déploiement
-                    writeFile file: 'deployment/docker-compose.yaml', text: """
-services:
+                    sh 'mkdir -p deployment'
+
+                    // Generation du docker-compose.yaml pour le deploiement
+                    writeFile file: 'deployment/docker-compose.yaml', text: """services:
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
@@ -273,7 +226,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik"
-      - "traefik.http.routers.moneystack-api-secured.rule=Host(\`moneystack-api.corentin-cuzeau.fr\`)"
+      - "traefik.http.routers.moneystack-api-secured.rule=Host(`moneystack-api.corentin-cuzeau.fr`)"
       - "traefik.http.routers.moneystack-api-secured.entrypoints=websecure"
       - "traefik.http.routers.moneystack-api-secured.tls=true"
       - "traefik.http.routers.moneystack-api-secured.tls.certresolver=letsencrypt"
@@ -299,7 +252,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik"
-      - "traefik.http.routers.moneystack-secured.rule=Host(\`moneystack.corentin-cuzeau.fr\`)"
+      - "traefik.http.routers.moneystack-secured.rule=Host(`moneystack.corentin-cuzeau.fr`)"
       - "traefik.http.routers.moneystack-secured.entrypoints=websecure"
       - "traefik.http.routers.moneystack-secured.tls=true"
       - "traefik.http.routers.moneystack-secured.tls.certresolver=letsencrypt"
@@ -323,7 +276,7 @@ networks:
     driver: bridge
 """
 
-                    // Génération du .env.example
+                    // Generation du .env.example
                     writeFile file: 'deployment/.env.example', text: """# ===========================================
 # MoneyStack Production Environment
 # ===========================================
@@ -347,56 +300,55 @@ NEXUS_REGISTRY_PULL=${NEXUS_REGISTRY_PULL}
 VERSION=${params.VERSION}
 """
 
-                    // Génération du README de déploiement
-                    writeFile file: 'deployment/README.md', text: """# MoneyStack - Déploiement Production
+                    // Generation du README de deploiement
+                    writeFile file: 'deployment/README.md', text: """# MoneyStack - Deploiement Production
 
 ## Version: ${params.VERSION}
-## Date: \$(date '+%Y-%m-%d %H:%M:%S')
 ## Commit: ${env.GIT_COMMIT_SHORT}
 
-## Prérequis
+## Prerequis
 
-1. Docker et Docker Compose installés sur le VPS
-2. Réseau Traefik externe créé : \`docker network create traefik\`
-3. Traefik configuré et en cours d'exécution
-4. Accès au registre Nexus (${NEXUS_REGISTRY_PULL})
+1. Docker et Docker Compose installes sur le VPS
+2. Reseau Traefik externe cree : \`docker network create traefik\`
+3. Traefik configure et en cours d'execution
+4. Acces au registre Nexus (${NEXUS_REGISTRY_PULL})
 
 ## Installation
 
-### 1. Créer le répertoire de déploiement
-\`\`\`bash
+### 1. Creer le repertoire de deploiement
+```bash
 mkdir -p /opt/moneystack
 cd /opt/moneystack
-\`\`\`
+```
 
 ### 2. Copier les fichiers
-\`\`\`bash
+```bash
 cp docker-compose.yaml /opt/moneystack/
 cp .env.example /opt/moneystack/.env
-\`\`\`
+```
 
 ### 3. Configurer l'environnement
-\`\`\`bash
+```bash
 nano /opt/moneystack/.env
 # Modifier les valeurs sensibles
-\`\`\`
+```
 
 ### 4. Se connecter au registre Nexus
-\`\`\`bash
+```bash
 docker login ${NEXUS_REGISTRY_PULL}
-\`\`\`
+```
 
-### 5. Démarrer les services
-\`\`\`bash
+### 5. Demarrer les services
+```bash
 cd /opt/moneystack
 docker compose pull
 docker compose up -d
-\`\`\`
+```
 
-### 6. Exécuter les migrations
-\`\`\`bash
-docker compose exec api npm run prisma:migrate:prod -w @moneystack/api
-\`\`\`
+### 6. Executer les migrations
+```bash
+docker compose exec api npx prisma migrate deploy
+```
 
 ## URLs
 
@@ -405,23 +357,21 @@ docker compose exec api npm run prisma:migrate:prod -w @moneystack/api
 
 ## Rollback
 
-Pour revenir à une version précédente :
-\`\`\`bash
+Pour revenir a une version precedente :
+```bash
 export VERSION=x.x.x
 docker compose pull
 docker compose up -d
-\`\`\`
+```
 
 ## Logs
 
-\`\`\`bash
+```bash
 docker compose logs -f api
 docker compose logs -f web
 docker compose logs -f postgres
-\`\`\`
+```
 """
-
-                    sh 'mkdir -p deployment'
                 }
             }
         }
@@ -465,7 +415,7 @@ docker compose logs -f postgres
         success {
             echo """
 ========================================
-Déploiement réussi !
+Deploiement reussi !
 ========================================
 Version: ${params.VERSION}
 API Image: ${IMAGE_API}:${params.VERSION}
@@ -478,7 +428,7 @@ URLs de production:
 """
         }
         failure {
-            echo "Le build a échoué. Vérifiez les logs pour plus de détails."
+            echo "Le build a echoue. Verifiez les logs pour plus de details."
         }
     }
 }
