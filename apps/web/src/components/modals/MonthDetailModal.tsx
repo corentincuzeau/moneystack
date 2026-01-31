@@ -2,10 +2,8 @@ import { useMemo } from 'react';
 import {
   Calendar,
   TrendingUp,
-  TrendingDown,
   CreditCard,
   Landmark,
-  Wallet,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -145,15 +143,13 @@ export function MonthDetailModal({
     return days;
   }, [month, startingBalance, subscriptions, credits, recurringIncomes]);
 
-  // Find min and max balance for the month
-  const { minBalance, maxBalance } = useMemo(() => {
+  // Find min balance for the month
+  const minBalance = useMemo(() => {
     let min = startingBalance;
-    let max = startingBalance;
     dailyData.forEach((day) => {
       if (day.balanceAfter < min) min = day.balanceAfter;
-      if (day.balanceAfter > max) max = day.balanceAfter;
     });
-    return { minBalance: min, maxBalance: max };
+    return min;
   }, [dailyData, startingBalance]);
 
   // Calculate totals
