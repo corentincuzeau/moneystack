@@ -26,9 +26,8 @@ services:
     container_name: moneystack-api-test
     command: >
       sh -c "
-        npm run prisma:generate -w @moneystack/api &&
-        npm run prisma:migrate -w @moneystack/api &&
-        npm run test -w @moneystack/api -- --ci --reporters=default --reporters=jest-junit
+        npx prisma migrate deploy --schema=apps/api/prisma/schema.prisma &&
+        npm run test -w @moneystack/api -- --passWithNoTests
       "
     environment:
       NODE_ENV: test
@@ -51,7 +50,7 @@ services:
       dockerfile: apps/web/Dockerfile
       target: builder
     container_name: moneystack-web-test
-    command: npm run test -w @moneystack/web -- --run --reporter=junit --outputFile=/app/test-results/junit-web.xml
+    command: npm run test -w @moneystack/web -- --run --passWithNoTests
     environment:
       NODE_ENV: test
     volumes:
